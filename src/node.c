@@ -36,8 +36,8 @@ void parse_ports(int argc, char **argv) {
     init_state(tcp_port, udp_port);
 }
 
-// --join <TCP> <UDP>
-// --seed <TCP1> <UDP1> --seed <TCP2> <UDP2> ...
+// To join a network: --join <TCP> <UDP>
+// To start a network: --seed <TCP1> <UDP1> --seed <TCP2> <UDP2> ...
 void parse_command(int argc, char **argv) {
     // node started in join mode
     if (strcmp(argv[4], "--join") == 0) {
@@ -46,23 +46,8 @@ void parse_command(int argc, char **argv) {
         return;
     }
 
-    // node started in network mode
-    int num_seeds = (argc - 4) / 3;
-    int *tcp_ports = malloc(num_seeds * sizeof(int));
-    int *udp_ports = malloc(num_seeds * sizeof(int));
-
-    for (int i = 0; i < num_seeds; i++) {
-        tcp_ports[i] = atoi(argv[4 + 3*i + 1]);
-        udp_ports[i] = atoi(argv[4 + 3*i + 2]);
-    }
-
-    populate_peers(&state, num_seeds, tcp_ports, udp_ports);
-    free(tcp_ports);
-    free(udp_ports);
-
-    for (int i = 0; i < state.num_peers; i++) {
-        logg(LEVEL_DBG, "%dth seed has TCP=%d, UDP=%d", i+1, state.tcp_ports[i], state.udp_ports[i]);
-    }
+    // node starts a network
+    start_network(argc, argv);
 }
 
 int main(int argc, char **argv) {
@@ -101,7 +86,6 @@ int main(int argc, char **argv) {
 
     // node running...
     while (1) {
-        // printf("Node %d-%d: Alive...\n", tcp_port, udp_port);
         char *peers_repr = print_peers(&state);
         logg(LEVEL_INFO, "peers: %s", peers_repr);
         free(peers_repr);

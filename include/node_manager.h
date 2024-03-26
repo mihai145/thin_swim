@@ -8,6 +8,8 @@ void init_state(int tcp_port, int udp_port);
 
 void join_network(int tcp_gateway, __attribute__((unused)) int udp_gateway);
 
+void start_network(int argc, char **argv);
+
 void *tcp_port_listener(__attribute__((unused)) void *params);
 
 void *udp_port_listener(__attribute__((unused)) void *params);

@@ -15,7 +15,6 @@
 #include "join_message.h"
 #include "gossip_message.h"
 
-
 #define GRACE_PERIOD 3
 #define GOSSIP_PERIOD 1
 #define PROBE_PERIOD 1
@@ -84,6 +83,25 @@ void join_network(int tcp_gateway, __attribute__((unused)) int udp_gateway) {
 
     close(fd_socket);
     populate_peers(&state, recv_msg.num_peers, recv_msg.tcp_ports, recv_msg.udp_ports);
+}
+
+void start_network(int argc, char **argv) {
+    int num_seeds = (argc - 4) / 3;
+    int *tcp_ports = malloc(num_seeds * sizeof(int));
+    int *udp_ports = malloc(num_seeds * sizeof(int));
+
+    for (int i = 0; i < num_seeds; i++) {
+        tcp_ports[i] = atoi(argv[4 + 3*i + 1]);
+        udp_ports[i] = atoi(argv[4 + 3*i + 2]);
+    }
+
+    populate_peers(&state, num_seeds, tcp_ports, udp_ports);
+    free(tcp_ports);
+    free(udp_ports);
+
+    for (int i = 0; i < state.num_peers; i++) {
+        logg(LEVEL_DBG, "%dth seed has TCP=%d, UDP=%d", i+1, state.tcp_ports[i], state.udp_ports[i]);
+    }
 }
 
 void *tcp_port_listener(__attribute__((unused)) void *params) {

@@ -7,7 +7,10 @@
 #define CAPACITY 100
 #define FAN_OUT 2
 
+
+// STRUCTS
 struct broadcast;
+struct node_state;
 
 struct node_state {
     // These can be accessed without holding the lock
@@ -40,6 +43,8 @@ struct broadcast {
    int remaining_rounds;
 };
 
+
+// FUNCTIONS
 void populate_peers(struct node_state *state, int num_peers, int* tcp_ports, int *udp_ports);
 
 int append_member(struct node_state *state, int tcp_port, int udp_port);
