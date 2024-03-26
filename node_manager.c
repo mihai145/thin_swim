@@ -21,8 +21,70 @@
 #define PROBE_PERIOD 1
 
 
-extern int tcp_port, udp_port, lamport_time;
-extern struct node_state state;
+struct node_state state;
+
+void init_state(int tcp_port, int udp_port) {
+      if (pthread_mutex_init(&state.lock, NULL) != 0) {
+          logg(LEVEL_FATAL, "Failed to init state lock");
+          exit(1);
+      }
+
+      state.own_tcp_port = tcp_port;
+      state.own_udp_port = udp_port;
+      state.lamport_time = 0;
+
+      state.cnt_broadcast = 0;
+      state.broadcast_list_capacity = 1;
+      state.broadcast_list = malloc(sizeof(struct broadcast));
+      state.tcp_ports_to_probe = NULL;
+      state.udp_ports_to_probe = NULL;
+      state.current_tcp_port_to_probe = -1;
+      state.current_udp_port_to_probe = -1;
+      state.probed = -1;
+      state.cnt_probing = 0;
+}
+
+void join_network(int tcp_gateway, __attribute__((unused)) int udp_gateway) {
+    struct sockaddr_in server_addr;
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(tcp_gateway);
+    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    int fd_socket = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd_socket < 0) {
+        logg(LEVEL_FATAL, "Failed to create TCP socket");
+        exit(1);
+    }
+    if (connect(fd_socket, (const struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+        logg(LEVEL_FATAL, "Error connecting to server TCP gateway socket");
+        exit(1);
+    }
+
+    // send join request
+    struct join_request snd_msg;
+    memset(&snd_msg, 0, sizeof(snd_msg));
+    snd_msg.tcp_port = state.own_tcp_port;
+    snd_msg.udp_port = state.own_udp_port;
+
+    if (send(fd_socket, &snd_msg, sizeof(snd_msg), 0) < 0) {
+        logg(LEVEL_FATAL, "Error occured while sending TCP message");
+        exit(1);
+    }
+
+    // wait for join reply
+    struct join_reply recv_msg;
+    memset(&recv_msg, 0, sizeof(recv_msg));
+    if (recv(fd_socket, &recv_msg, sizeof(recv_msg), 0) < 0) {
+        logg(LEVEL_FATAL, "Did not receive join reply");
+        exit(1);
+    }
+
+    logg(LEVEL_INFO, "Received join reply, discovered network with %d peers", recv_msg.num_peers);
+
+    close(fd_socket);
+    populate_peers(&state, recv_msg.num_peers, recv_msg.tcp_ports, recv_msg.udp_ports);
+}
 
 void *tcp_port_listener(__attribute__((unused)) void *params) {
     int fd_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -34,7 +96,7 @@ void *tcp_port_listener(__attribute__((unused)) void *params) {
     struct sockaddr_in server_addr;
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(tcp_port);
+    server_addr.sin_port = htons(state.own_tcp_port);
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     if (bind(fd_socket, (const struct sockaddr*) &server_addr, sizeof(server_addr)) < 0) {
@@ -46,7 +108,7 @@ void *tcp_port_listener(__attribute__((unused)) void *params) {
         logg(LEVEL_FATAL, "Failed to start listening to desired port");
         exit(1);
     } else {
-        logg(LEVEL_INFO, "Listening on TCP port %d", tcp_port);
+        logg(LEVEL_INFO, "Listening on TCP port %d", state.own_tcp_port);
     }
 
     while (1) {
@@ -78,8 +140,8 @@ void *tcp_port_listener(__attribute__((unused)) void *params) {
         snd_msg.num_peers = state.num_peers + 1;
         memcpy(snd_msg.tcp_ports, state.tcp_ports, sizeof(int) * state.num_peers);
         memcpy(snd_msg.udp_ports, state.udp_ports, sizeof(int) * state.num_peers);
-        snd_msg.tcp_ports[state.num_peers] = tcp_port;
-        snd_msg.udp_ports[state.num_peers] = udp_port;
+        snd_msg.tcp_ports[state.num_peers] = state.own_tcp_port;
+        snd_msg.udp_ports[state.num_peers] = state.own_udp_port;
 
         if (send(client_socket, &snd_msg, sizeof(snd_msg), 0) < 0) {
             logg(LEVEL_DBG, "Error occured while sending join reply. Resume listening...");
@@ -109,7 +171,7 @@ void *udp_port_listener(__attribute__((unused)) void *params) {
     struct sockaddr_in server_addr;
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(udp_port);
+    server_addr.sin_port = htons(state.own_udp_port);
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     if (bind(fd_socket, (const struct sockaddr*) &server_addr, sizeof(server_addr)) < 0) {
@@ -135,8 +197,7 @@ void *udp_port_listener(__attribute__((unused)) void *params) {
             reply_probe(&state, recv_msg.node_name_udp);
         }
         if (recv_msg.message_type == ACK_PROBE) {
-            // check ack
-            check_ack(&state, recv_msg.node_name_udp);
+            check_ack(&state, recv_msg.node_name_udp);    // check ack
         }
     }
 
@@ -145,11 +206,9 @@ void *udp_port_listener(__attribute__((unused)) void *params) {
 
 void *prober(__attribute__((unused)) void *params) {
     sleep(GRACE_PERIOD);
-
     logg(LEVEL_INFO, "Started probing...");
 
     while (1) {
-        // printf("Node %d-%d: probing...\n", tcp_port, udp_port);
         probe_next(&state);
         sleep(PROBE_PERIOD);
         check_probed(&state);
@@ -160,56 +219,12 @@ void *prober(__attribute__((unused)) void *params) {
 
 void *gossiper(__attribute__((unused)) void *params) {
     sleep(GRACE_PERIOD);
-
     logg(LEVEL_INFO, "Started gossiping...");
 
     while (1) {
-        // printf("Node %d-%d: gossiping...\n", tcp_port, udp_port);
-        gossip_changes(&state, tcp_port, lamport_time);
+        gossip_changes(&state);
         sleep(GOSSIP_PERIOD);
     }
 
     return NULL;
-}
-
-void join_network(int tcp_gateway, __attribute__((unused)) int udp_gateway) {
-    struct sockaddr_in server_addr;
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(tcp_gateway);
-    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-
-    int fd_socket = socket(AF_INET, SOCK_STREAM, 0);
-    if (fd_socket < 0) {
-        logg(LEVEL_FATAL, "Failed to create TCP socket");
-        exit(1);
-    }
-    if (connect(fd_socket, (const struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-        logg(LEVEL_FATAL, "Error connecting to server TCP gateway socket");
-        exit(1);
-    }
-
-    // send join request
-    struct join_request snd_msg;
-    memset(&snd_msg, 0, sizeof(snd_msg));
-    snd_msg.tcp_port = tcp_port;
-    snd_msg.udp_port = udp_port;
-
-    if (send(fd_socket, &snd_msg, sizeof(snd_msg), 0) < 0) {
-        logg(LEVEL_FATAL, "Error occured while sending TCP message");
-        exit(1);
-    }
-
-    // wait for join reply
-    struct join_reply recv_msg;
-    memset(&recv_msg, 0, sizeof(recv_msg));
-    if (recv(fd_socket, &recv_msg, sizeof(recv_msg), 0) < 0) {
-        logg(LEVEL_FATAL, "Did not receive join reply");
-        exit(1);
-    }
-
-    logg(LEVEL_INFO, "Received join reply, discovered network with %d peers", recv_msg.num_peers);
-
-    close(fd_socket);
-    populate_peers(&state, recv_msg.num_peers, recv_msg.tcp_ports, recv_msg.udp_ports);
 }

@@ -7,21 +7,17 @@
 #define CAPACITY 100
 #define FAN_OUT 2
 
-struct broadcast {
-    int tcp_port, udp_port;
-    int status;  // 0 -> removed, 1 -> joined
-
-    int remaining_rounds;
-};
+struct broadcast;
 
 struct node_state {
-    pthread_mutex_t lock;
-
+    // These can be accessed without holding the lock
     int own_tcp_port, own_udp_port;
 
-    int capacity;
-    int num_peers;
+    pthread_mutex_t lock;
 
+    int lamport_time;
+
+    int capacity, num_peers;
     int* tcp_ports;
     int* udp_ports;
 
@@ -37,6 +33,13 @@ struct node_state {
     struct broadcast* broadcast_list;
 };
 
+struct broadcast {
+   int tcp_port, udp_port;
+   int status;  // 0 -> removed, 1 -> joined
+
+   int remaining_rounds;
+};
+
 void populate_peers(struct node_state *state, int num_peers, int* tcp_ports, int *udp_ports);
 
 int append_member(struct node_state *state, int tcp_port, int udp_port);
@@ -45,7 +48,7 @@ char *print_peers(struct node_state *state);
 
 void append_broadcast(struct node_state *state, int tcp_port, int udp_port, int status);
 
-void gossip_changes(struct node_state *state, int node_name, int node_time);
+void gossip_changes(struct node_state *state);
 
 void process_updates(struct node_state *state, struct gossip_message *gossip);
 

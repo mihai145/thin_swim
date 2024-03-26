@@ -9,20 +9,18 @@
 #include "state.h"
 #include "node_manager.h"
 
-int tcp_port = -1, udp_port = -1;
-int lamport_time = 0;
-struct node_state state;
 
+// STATE
+extern struct node_state state;
+
+// SIGNAL HANDLER
 void sigint_handler(__attribute__((unused)) int signum)
 {
-    if (is_logger_inited()) {
-        logg(LEVEL_FATAL, "Received SIGINT, stopping...");
-    } else {
-        printf("Node %d - %d: Received SIGINT, stopping...\n", tcp_port, udp_port);
-    }
+    logg(LEVEL_FATAL, "Received SIGINT, stopping...");
     exit(0);
 }
 
+// --ports <TCP> <UDP>
 void parse_ports(int argc, char **argv) {
     if (argc < 4 || strcmp(argv[1], "--ports") != 0) {
         puts("Failed to configure ports");
@@ -31,12 +29,15 @@ void parse_ports(int argc, char **argv) {
         exit(1);
     }
 
-    tcp_port = atoi(argv[2]);
-    udp_port = atoi(argv[3]);
+    int tcp_port = atoi(argv[2]);
+    int udp_port = atoi(argv[3]);
 
     init_logger(tcp_port, udp_port);
+    init_state(tcp_port, udp_port);
 }
 
+// --join <TCP> <UDP>
+// --seed <TCP1> <UDP1> --seed <TCP2> <UDP2> ...
 void parse_command(int argc, char **argv) {
     // node started in join mode
     if (strcmp(argv[4], "--join") == 0) {
@@ -69,8 +70,6 @@ int main(int argc, char **argv) {
 
     // retrieve own identity
     parse_ports(argc, argv);
-    state.own_tcp_port = tcp_port;
-    state.own_udp_port = udp_port;
 
     // start a new network or join an existing network
     parse_command(argc, argv);

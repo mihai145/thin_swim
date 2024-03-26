@@ -22,15 +22,6 @@ void populate_peers(struct node_state *state, int num_peers, int* tcp_ports, int
     pthread_mutex_lock(&state->lock);
     state->capacity = CAPACITY;
     state->num_peers = num_peers;
-    state->cnt_broadcast = 0;
-    state->broadcast_list_capacity = 1;
-    state->broadcast_list = malloc(sizeof(struct broadcast));
-    state->tcp_ports_to_probe = NULL;
-    state->udp_ports_to_probe = NULL;
-    state->current_tcp_port_to_probe = -1;
-    state->current_udp_port_to_probe = -1;
-    state->probed = -1;
-    state->cnt_probing = 0;
 
     state->tcp_ports = (int*)malloc(sizeof(int) * state->capacity);
     state->udp_ports = (int*)malloc(sizeof(int) * state->capacity);
@@ -119,7 +110,7 @@ void tidy_broadcast_list(struct node_state *state) {
     free(tidied_list);
 }
 
-void gossip_changes_to(struct node_state *state, int udp_port, struct gossip_message *gossip) {
+void gossip_changes_to(int udp_port, struct gossip_message *gossip) {
     logg(LEVEL_DBG, "Gossiping %d changes to %d", gossip->cnt_updates, udp_port);
 
     int fd_socket = socket(AF_INET, SOCK_DGRAM, 0);
@@ -139,7 +130,7 @@ void gossip_changes_to(struct node_state *state, int udp_port, struct gossip_mes
     }
 }
 
-void gossip_changes(struct node_state *state, int node_name, int node_time) {
+void gossip_changes(struct node_state *state) {
     pthread_mutex_lock(&state->lock);
     if (state->cnt_broadcast == 0) {
         pthread_mutex_unlock(&state->lock);
@@ -149,8 +140,8 @@ void gossip_changes(struct node_state *state, int node_name, int node_time) {
     struct gossip_message gossip;
 
     gossip.message_type = GOSSIP_UPDATE;
-    gossip.node_name_tcp = node_name;
-    gossip.node_time = node_time;
+    gossip.node_name_tcp = state->own_tcp_port;
+    gossip.node_time = state->lamport_time;
     gossip.cnt_updates = state->cnt_broadcast;
     for (int i = 0; i < gossip.cnt_updates; i++) {
         gossip.tcp_ports[i] = state->broadcast_list[i].tcp_port;
@@ -165,7 +156,7 @@ void gossip_changes(struct node_state *state, int node_name, int node_time) {
     if (state->num_peers > 0) {
         for (int i = 0; i < FAN_OUT; i++) {
             int idx_peer = rand() % state->num_peers;
-            gossip_changes_to(state, state->udp_ports[idx_peer], &gossip);
+            gossip_changes_to(state->udp_ports[idx_peer], &gossip);
         }
     }
     pthread_mutex_unlock(&state->lock);

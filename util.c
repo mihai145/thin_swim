@@ -6,17 +6,12 @@
 
 #include "util.h"
 
-int log_tcp_port, log_udp_port;
-int inited = 0;
 
-int is_logger_inited() {
-    return inited;
-}
+int log_tcp_port, log_udp_port;
 
 void init_logger(int tcp_port_, int udp_port_) {
     log_tcp_port = tcp_port_;
     log_udp_port = udp_port_;
-    inited = 1;
 }
 
 void set_color(const char* level, char* log, char* msg) {

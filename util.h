@@ -13,7 +13,6 @@
 #define PREFIX_FORMAT "[%s   %ld   Node %d-%d]: "
 #define COLORED_LOG_FORMAT "%s %s %s"
 
-int is_logger_inited();
 
 void init_logger(int tcp_port_, int udp_port_);
 
