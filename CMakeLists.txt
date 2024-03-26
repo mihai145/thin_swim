@@ -9,7 +9,7 @@ add_library(c_setup INTERFACE)
 target_compile_features(c_setup INTERFACE c_std_11)
 target_compile_options(c_setup INTERFACE -Wall -Wextra)
 
-add_executable(node node.c state.c util.c)
+add_executable(node node.c node_manager.c state.c util.c)
 add_executable(start start.c)
 add_executable(test_log test_log.c util.c)
 
