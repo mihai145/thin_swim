@@ -1,3 +1,6 @@
+// Used to set up a network (forks seed nodes)
+// Usage: start --seed <TCP1> <UDP1> --seed <TCP2> <UDP2> ...
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
