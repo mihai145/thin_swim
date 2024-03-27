@@ -10,8 +10,8 @@
 #define COLOR_FATAL "\033[0;31m"
 #define COLOR_RESET "\033[0m"
 
-#define PREFIX_FORMAT "[%s   %ld   Node %d-%d]: "
-#define COLORED_LOG_FORMAT "%s %s %s"
+#define PREFIX_FORMAT "[%s   %ld:%ld   Node %d-%d]: "
+#define COLORED_LOG_FORMAT "%s%s%s"
 
 
 void init_logger(int tcp_port_, int udp_port_);

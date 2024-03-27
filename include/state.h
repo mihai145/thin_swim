@@ -32,6 +32,10 @@ struct node_state {
     int current_udp_port_to_probe;
     int probed;
 
+    int cnt_request_probes;
+    int* udp_ports_requested_to_probe;
+    long long* probe_request_ns;
+
     int cnt_broadcast, broadcast_list_capacity;
     struct broadcast* broadcast_list;
 };
@@ -64,5 +68,11 @@ void reply_probe(struct node_state *state, int udp_port);
 void check_ack(struct node_state *state, int udp_port);
 
 void check_probed(struct node_state *state);
+
+void request_probes_if_no_ack(struct node_state *state);
+
+void append_request_probe(struct node_state *state, int target_udp);
+
+void fulfil_request_probes(struct node_state *state, int udp_port);
 
 #endif

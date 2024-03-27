@@ -15,6 +15,9 @@ struct gossip_message {
 
     // lamport time as for this message
     int node_name_tcp, node_name_udp, node_time;
+
+    // if message type is REQUEST_PROBE
+    int target_udp;
 };
 
 #endif

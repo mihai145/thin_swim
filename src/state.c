@@ -110,9 +110,7 @@ void tidy_broadcast_list(struct node_state *state) {
     free(tidied_list);
 }
 
-void gossip_changes_to(int udp_port, struct gossip_message *gossip) {
-    logg(LEVEL_DBG, "Gossiping %d changes to %d", gossip->cnt_updates, udp_port);
-
+void send_gossip_message_to(int udp_port, struct gossip_message *gossip) {
     int fd_socket = socket(AF_INET, SOCK_DGRAM, 0);
     if (fd_socket < 0) {
         logg(LEVEL_DBG, "Failed to open UDP socket");
@@ -156,7 +154,8 @@ void gossip_changes(struct node_state *state) {
     if (state->num_peers > 0) {
         for (int i = 0; i < FAN_OUT; i++) {
             int idx_peer = rand() % state->num_peers;
-            gossip_changes_to(state->udp_ports[idx_peer], &gossip);
+            logg(LEVEL_DBG, "Gossiping %d changes to %d", gossip.cnt_updates, state->udp_ports[idx_peer]);
+            send_gossip_message_to(state->udp_ports[idx_peer], &gossip);
         }
     }
     pthread_mutex_unlock(&state->lock);
@@ -259,12 +258,6 @@ void fisher_yates(struct node_state *state) {
         swap(&state->tcp_ports_to_probe[i], &state->tcp_ports_to_probe[rand_idx]);
         swap(&state->udp_ports_to_probe[i], &state->udp_ports_to_probe[rand_idx]);
     }
-
-    // printf("Node %d-%d: fisher_yates udp result: ", state->own_tcp_port, state->own_udp_port);
-    // for (int i = 0; i < state->cnt_probing; i++) {
-    //     printf("%d ", state->udp_ports_to_probe[i]);
-    // }
-    // puts("");
 }
 
 void probe(struct node_state *state, int udp_port) {
@@ -368,4 +361,40 @@ void check_probed(struct node_state *state) {
   }
 
   pthread_mutex_unlock(&state->lock);
+}
+
+void request_probes_if_no_ack(struct node_state *state) {
+    // check if we are currently & unsuccesfully probing a node
+    // if so, send request probe to FANOUT random peers
+
+    pthread_mutex_lock(&state->lock);
+
+    if (state->current_udp_port_to_probe != -1 && state->probed == -1) {
+        struct gossip_message request;
+        request.message_type = REQUEST_PROBE;
+        request.target_udp = state->current_udp_port_to_probe;
+        request.node_name_tcp = state->own_tcp_port;
+        request.node_name_udp = state->own_udp_port;
+        request.node_time = state->lamport_time;
+
+        // send request probe to fan_out random peers (in the current implementation, may not be distinct)
+        if (state->num_peers > 0) {
+            for (int i = 0; i < FAN_OUT; i++) {
+                int idx_peer = rand() % state->num_peers;
+                logg(LEVEL_DBG, "Sending request-probe to %d to check on %d", state->udp_ports[idx_peer], state->current_udp_port_to_probe);
+                send_gossip_message_to(state->udp_ports[idx_peer], &request);
+            }
+        }
+    }
+
+    pthread_mutex_unlock(&state->lock);
+}
+
+void append_request_probe(__attribute__((unused)) struct node_state *state, __attribute__((unused)) int target_udp) {
+    // append current request to list of probe requests
+}
+
+void fulfil_request_probes(__attribute__((unused)) struct node_state *state, __attribute__((unused)) int udp_port) {
+    // send ack to all request probes for this udp_port who have not expired
+    // delete answered & expired requests
 }

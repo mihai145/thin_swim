@@ -38,7 +38,6 @@ void logg(const char* level, const char* fmt, ...) {
     // get current time
     struct timespec tp;
     clock_gettime(CLOCK_MONOTONIC, &tp);
-    long ms = tp.tv_nsec;
 
     char *p = NULL;
     va_list ap;
@@ -56,11 +55,11 @@ void logg(const char* level, const char* fmt, ...) {
 
     // Calculate size for preffix
     char *prefix = NULL;
-    int m = snprintf(prefix, 0, PREFIX_FORMAT, level, ms, log_tcp_port, log_udp_port);
+    int m = snprintf(prefix, 0, PREFIX_FORMAT, level, tp.tv_sec, tp.tv_nsec, log_tcp_port, log_udp_port);
 
     // Write preffix
     prefix = (char*)malloc(m + n + 1);
-    snprintf(prefix, m+1, PREFIX_FORMAT, level, ms, log_tcp_port, log_udp_port);
+    snprintf(prefix, m+1, PREFIX_FORMAT, level, tp.tv_sec, tp.tv_nsec, log_tcp_port, log_udp_port);
 
     // Concatenate message to prefix
     strcat(prefix, p);

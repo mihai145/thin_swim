@@ -11,6 +11,7 @@
 #include "node_manager.h"
 #include "state.h"
 #include "log.h"
+#include "time_utils.h"
 
 #include "join_message.h"
 #include "gossip_message.h"
@@ -41,6 +42,9 @@ void init_state(int tcp_port, int udp_port) {
       state.current_udp_port_to_probe = -1;
       state.probed = -1;
       state.cnt_probing = 0;
+      state.cnt_request_probes = 0;
+      state.udp_ports_requested_to_probe = NULL;
+      state.probe_request_ns = NULL;
 }
 
 void join_network(int tcp_gateway, __attribute__((unused)) int udp_gateway) {
@@ -215,7 +219,11 @@ void *udp_port_listener(__attribute__((unused)) void *params) {
             reply_probe(&state, recv_msg.node_name_udp);
         }
         if (recv_msg.message_type == ACK_PROBE) {
-            check_ack(&state, recv_msg.node_name_udp);    // check ack
+            check_ack(&state, recv_msg.node_name_udp);                   // check ack
+            fulfil_request_probes(&state, recv_msg.node_name_udp);   // check if we could answer a REQUEST_PROBE
+        }
+        if (recv_msg.message_type == REQUEST_PROBE) {
+            append_request_probe(&state, recv_msg.target_udp);
         }
     }
 
@@ -228,7 +236,12 @@ void *prober(__attribute__((unused)) void *params) {
 
     while (1) {
         probe_next(&state);
-        sleep(PROBE_PERIOD);
+        sleep_(1. * PROBE_PERIOD / 4.);
+
+        // if no ack in PROBE_PERIOD / 4, request random peers to probe
+        request_probes_if_no_ack(&state);
+        sleep_(3. * PROBE_PERIOD / 4.);
+
         check_probed(&state);
     }
 
