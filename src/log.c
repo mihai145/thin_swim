@@ -4,7 +4,7 @@
 #include <stdarg.h>
 #include <string.h>
 
-#include "util.h"
+#include "log.h"
 
 
 int log_tcp_port, log_udp_port;

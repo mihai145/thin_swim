@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <pthread.h>
 
-#include "util.h"
+#include "log.h"
 #include "state.h"
 #include "node_manager.h"
 

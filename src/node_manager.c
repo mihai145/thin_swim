@@ -10,7 +10,7 @@
 
 #include "node_manager.h"
 #include "state.h"
-#include "util.h"
+#include "log.h"
 
 #include "join_message.h"
 #include "gossip_message.h"

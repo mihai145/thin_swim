@@ -1,5 +1,5 @@
-#ifndef UTIL_H
-#define UTIL_H
+#ifndef LOG_H
+#define LOG_H
 
 #define LEVEL_FATAL "FATAL"
 #define LEVEL_INFO " INFO"
