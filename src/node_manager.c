@@ -12,13 +12,10 @@
 #include "state.h"
 #include "log.h"
 #include "time_utils.h"
+#include "constants.h"
 
 #include "join_message.h"
 #include "gossip_message.h"
-
-#define GRACE_PERIOD 3
-#define GOSSIP_PERIOD 1
-#define PROBE_PERIOD 1
 
 
 struct node_state state;
@@ -43,8 +40,9 @@ void init_state(int tcp_port, int udp_port) {
       state.probed = -1;
       state.cnt_probing = 0;
       state.cnt_request_probes = 0;
-      state.udp_ports_requested_to_probe = NULL;
-      state.probe_request_ns = NULL;
+      state.udp_ports_requested_to_probe = malloc(CAPACITY * sizeof(int));
+      state.udp_ports_requestors = malloc(CAPACITY * sizeof(int));
+      state.probe_request_ns = malloc(CAPACITY * sizeof(long long));
 }
 
 void join_network(int tcp_gateway, __attribute__((unused)) int udp_gateway) {
@@ -215,6 +213,15 @@ void *udp_port_listener(__attribute__((unused)) void *params) {
             process_updates(&state, &recv_msg);
         }
         if (recv_msg.message_type == PROBE) {
+            #ifdef LAZY_NODE
+                    pthread_mutex_lock(&state.lock);
+                    int fraction = 2 + state.num_peers;
+                    if (fraction <= 0) fraction = 2;
+                    pthread_mutex_unlock(&state.lock);
+
+                    logg(LEVEL_DBG, "Lazing around %f seconds...", 1. * PROBE_PERIOD / (2 * fraction));
+                    sleep_(1. * PROBE_PERIOD / (2 * fraction));
+            #endif
             logg(LEVEL_DBG, "Probed by %d. Sending reply...", recv_msg.node_name_udp);
             reply_probe(&state, recv_msg.node_name_udp);
         }
@@ -223,7 +230,7 @@ void *udp_port_listener(__attribute__((unused)) void *params) {
             fulfil_request_probes(&state, recv_msg.node_name_udp);   // check if we could answer a REQUEST_PROBE
         }
         if (recv_msg.message_type == REQUEST_PROBE) {
-            append_request_probe(&state, recv_msg.target_udp);
+            append_request_probe(&state, recv_msg.target_udp, recv_msg.node_name_udp);
         }
     }
 

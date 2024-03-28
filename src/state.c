@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <time.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -11,6 +12,7 @@
 #include "log.h"
 #include "state.h"
 #include "gossip_message.h"
+#include "constants.h"
 
 
 void populate_peers(struct node_state *state, int num_peers, int* tcp_ports, int *udp_ports) {
@@ -353,8 +355,10 @@ void check_probed(struct node_state *state) {
           logg(LEVEL_INFO, "found %d-%d is dead", state->current_tcp_port_to_probe, state->current_udp_port_to_probe);
 
           int idx_peer = idx_of(state, state->current_tcp_port_to_probe, state->current_udp_port_to_probe);
-          remove_peer(state, idx_peer);
-          add_broadcast_to_list(state, state->current_tcp_port_to_probe, state->current_udp_port_to_probe, 0);
+          if (idx_peer != -1) {
+              remove_peer(state, idx_peer);
+              add_broadcast_to_list(state, state->current_tcp_port_to_probe, state->current_udp_port_to_probe, 0);
+          }
       } else {
           logg(LEVEL_DBG, "found %d-%d is alive", state->current_tcp_port_to_probe, state->current_udp_port_to_probe);
       }
@@ -377,7 +381,7 @@ void request_probes_if_no_ack(struct node_state *state) {
         request.node_name_udp = state->own_udp_port;
         request.node_time = state->lamport_time;
 
-        // send request probe to fan_out random peers (in the current implementation, may not be distinct)
+        // send request probe to fan_out random peers (in the current implementation, may not be distinct + MAY BE IDENTICAL to current_udp_port_to_probe)
         if (state->num_peers > 0) {
             for (int i = 0; i < FAN_OUT; i++) {
                 int idx_peer = rand() % state->num_peers;
@@ -390,11 +394,87 @@ void request_probes_if_no_ack(struct node_state *state) {
     pthread_mutex_unlock(&state->lock);
 }
 
-void append_request_probe(__attribute__((unused)) struct node_state *state, __attribute__((unused)) int target_udp) {
+void append_request_probe(struct node_state *state, int target_udp, int requestor_udp) {
     // append current request to list of probe requests
+
+    pthread_mutex_lock(&state->lock);
+
+    struct timespec tp;
+    clock_gettime(CLOCK_MONOTONIC, &tp);
+    long long ns = tp.tv_sec * (long long)1000000000 + tp.tv_nsec;
+
+    if (state->cnt_request_probes >= CAPACITY) {
+        logg(LEVEL_FATAL, "Could not append request probe, capacity reached");
+        exit(1);
+    }
+
+    state->udp_ports_requested_to_probe[state->cnt_request_probes] = target_udp;
+    state->udp_ports_requestors[state->cnt_request_probes] = requestor_udp;
+    state->probe_request_ns[state->cnt_request_probes] = ns;
+    state->cnt_request_probes++;
+
+    probe(state, target_udp);
+
+    pthread_mutex_unlock(&state->lock);
 }
 
-void fulfil_request_probes(__attribute__((unused)) struct node_state *state, __attribute__((unused)) int udp_port) {
+int not_expired(long long ns_request, long long ns_current) {
+    long double off_s = 3. * PROBE_PERIOD / 4.;
+    long double off_ms = off_s * 1000000000;
+
+    if (ns_request + off_ms >= ns_current) return 1;
+    return 0;
+}
+
+void fulfil_request_probes(struct node_state *state, int udp_port) {
     // send ack to all request probes for this udp_port who have not expired
     // delete answered & expired requests
+
+    pthread_mutex_lock(&state->lock);
+
+    struct timespec tspec;
+    clock_gettime(CLOCK_MONOTONIC, &tspec);
+    long long ns_current = tspec.tv_sec * (long long)1000000000 + tspec.tv_nsec;
+
+    int rem_request_probes = 0;
+    int *rem_udp_ports_requested_to_probe = malloc(CAPACITY * sizeof(int));
+    int *rem_udp_ports_requestors = malloc(CAPACITY * sizeof(int));
+    long long *rem_probe_request_ns = malloc(CAPACITY * sizeof(long long));
+
+    for (int i = 0; i < state->cnt_request_probes; i++) {
+        if (not_expired(state->probe_request_ns[i], ns_current)) {
+            if (state->udp_ports_requested_to_probe[i] != udp_port) {
+                  rem_udp_ports_requested_to_probe[rem_request_probes] = state->udp_ports_requested_to_probe[i];
+                  rem_udp_ports_requestors[rem_request_probes] = state->udp_ports_requestors[i];
+                  rem_probe_request_ns[rem_request_probes] = state->probe_request_ns[i];
+                  rem_request_probes++;
+            } else {
+                  // send ack to requestser
+                  logg(LEVEL_INFO, "Acking %d that %d is alive", state->udp_ports_requestors[i], udp_port);
+
+                  struct gossip_message gossip;
+                  gossip.message_type = ACK_PROBE;
+                  gossip.node_name_udp = udp_port;
+
+                  send_gossip_message_to(state->udp_ports_requestors[i], &gossip);
+            }
+        }
+    }
+
+    int *tp = state->udp_ports_requested_to_probe;
+    state->udp_ports_requested_to_probe = rem_udp_ports_requested_to_probe;
+
+    int *tpr = state->udp_ports_requestors;
+    state->udp_ports_requestors = rem_udp_ports_requestors;
+
+    long long *ltp = state->probe_request_ns;
+    state->probe_request_ns = rem_probe_request_ns;
+
+    state->cnt_request_probes = rem_request_probes;
+
+    free(tp);
+    free(tpr);
+    free(ltp);
+
+    pthread_mutex_unlock(&state->lock);
 }

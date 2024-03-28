@@ -10,14 +10,23 @@ target_compile_features(c_setup INTERFACE c_std_11)
 target_compile_options(c_setup INTERFACE -Wall -Wextra)
 target_include_directories(c_setup INTERFACE include)
 
+# NODES
 add_executable(node src/node.c src/node_manager.c src/state.c src/log.c src/time_utils.c)
+add_executable(lazy_node src/node.c src/node_manager.c src/state.c src/log.c src/time_utils.c)
+target_link_libraries(node PRIVATE c_setup m)
+target_link_libraries(lazy_node PRIVATE c_setup m)
+target_compile_definitions(lazy_node PRIVATE LAZY_NODE)
+
+# TESTS
 add_executable(test_log test/test_log.c src/log.c)
 add_executable(test_sleep test/test_sleep.c src/log.c src/time_utils.c)
-add_executable(start start.c)
-
-# target_compile_definitions(node PRIVATE LOGS_SUCCINT)
-
-target_link_libraries(node PRIVATE c_setup m)
 target_link_libraries(test_log PRIVATE c_setup)
 target_link_libraries(test_sleep PRIVATE c_setup)
+
+# STARTER
+add_executable(start start.c)
 target_link_libraries(start PRIVATE c_setup)
+
+# HIDES DEBUG LOGS:
+# target_compile_definitions(node PRIVATE LOGS_SUCCINT)
+# target_compile_definitions(lazy_node PRIVATE LOGS_SUCCINT)
