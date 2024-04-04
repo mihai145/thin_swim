@@ -7,6 +7,7 @@
 #define PROBE 1
 #define REQUEST_PROBE 2
 #define ACK_PROBE 3
+#define NOT_A_PEER 4
 
 struct gossip_message {
     int message_type;

@@ -16,21 +16,16 @@
 
 
 void populate_peers(struct node_state *state, int num_peers, int* tcp_ports, int *udp_ports) {
-    if (pthread_mutex_init(&state->lock, NULL) != 0) {
-        logg(LEVEL_FATAL, "Failed to init state lock");
-        exit(1);
-    }
-
-    pthread_mutex_lock(&state->lock);
     state->capacity = CAPACITY;
     state->num_peers = num_peers;
 
+    if (state->tcp_ports != NULL) free(state->tcp_ports);
+    if (state->udp_ports != NULL) free(state->udp_ports);
     state->tcp_ports = (int*)malloc(sizeof(int) * state->capacity);
     state->udp_ports = (int*)malloc(sizeof(int) * state->capacity);
 
     memcpy(state->tcp_ports, tcp_ports, sizeof(int) * num_peers);
     memcpy(state->udp_ports, udp_ports, sizeof(int) * num_peers);
-    pthread_mutex_unlock(&state->lock);
 }
 
 int append_member(struct node_state *state, int tcp_port, int udp_port) {
@@ -235,6 +230,7 @@ void gossip_changes(struct node_state *state) {
 
     gossip.message_type = GOSSIP_UPDATE;
     gossip.node_name_tcp = state->own_tcp_port;
+    gossip.node_name_udp = state->own_udp_port;
     gossip.node_time = state->lamport_time;
     gossip.cnt_updates = state->cnt_broadcast;
     for (int i = 0; i < gossip.cnt_updates; i++) {
@@ -552,5 +548,45 @@ void fulfil_request_probes(struct node_state *state, int udp_port) {
     free(tpr);
     free(ltp);
 
+    pthread_mutex_unlock(&state->lock);
+}
+
+int is_peer(struct node_state *state, int udp_port) {
+    pthread_mutex_lock(&state->lock);
+
+    int peer = 0;
+    for (int i = 0; i < state->num_peers; i++) {
+        if(state->udp_ports[i] == udp_port) {
+            peer = 1;
+            break;
+        }
+    }
+
+    pthread_mutex_unlock(&state->lock);
+
+    return peer;
+}
+
+void reply_not_peer(struct node_state *state, int udp_port) {
+    pthread_mutex_lock(&state->lock);
+
+    logg(LEVEL_INFO, "Sending %d NOT_A_PEER reply", udp_port);
+
+    struct gossip_message gossip;
+    gossip.message_type = NOT_A_PEER;
+    gossip.node_name_tcp = state->own_tcp_port;
+    gossip.node_name_udp = state->own_udp_port;
+
+    send_gossip_message_to(udp_port, &gossip);
+
+    pthread_mutex_unlock(&state->lock);
+}
+
+void remv_peer(struct node_state *state, int tcp_port, int udp_port) {
+    pthread_mutex_lock(&state->lock);
+    int idx_peer = idx_of(state, tcp_port, udp_port);
+    if (idx_peer > 0) {
+        remove_peer(state, idx_peer);
+    }
     pthread_mutex_unlock(&state->lock);
 }

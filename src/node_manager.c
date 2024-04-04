@@ -45,6 +45,43 @@ void init_state(int tcp_port, int udp_port) {
       state.probe_request_ns = malloc(CAPACITY * sizeof(long long));
 }
 
+void reset_state() {
+    pthread_mutex_lock(&state.lock);
+    state.cnt_broadcast = 0;
+    state.broadcast_list_capacity = 1;
+
+    if (state.tcp_ports_to_probe != NULL) {
+        free(state.tcp_ports_to_probe);
+        state.tcp_ports_to_probe = NULL;
+    }
+    if (state.udp_ports_to_probe != NULL) {
+        free(state.udp_ports_to_probe);
+        state.udp_ports_to_probe = NULL;
+    }
+
+    state.current_tcp_port_to_probe = -1;
+    state.current_udp_port_to_probe = -1;
+    state.probed = -1;
+    state.cnt_probing = 0;
+    state.cnt_request_probes = 0;
+
+    free(state.udp_ports_requested_to_probe);
+    free(state.udp_ports_requestors);
+    free(state.probe_request_ns);
+    state.udp_ports_requested_to_probe = malloc(CAPACITY * sizeof(int));
+    state.udp_ports_requestors = malloc(CAPACITY * sizeof(int));
+    state.probe_request_ns = malloc(CAPACITY * sizeof(long long));
+
+    if (state.num_peers == 0) {
+        logg(LEVEL_FATAL, "No peer to connect to");
+    }
+
+    int rand_peer = rand() % state.num_peers;
+    join_network(state.tcp_ports[rand_peer], state.udp_ports[rand_peer]);
+
+    pthread_mutex_unlock(&state.lock);
+}
+
 void join_network(int tcp_gateway, __attribute__((unused)) int udp_gateway) {
     struct sockaddr_in server_addr;
     memset(&server_addr, 0, sizeof(server_addr));
@@ -154,6 +191,8 @@ void *tcp_port_listener(__attribute__((unused)) void *params) {
         logg(LEVEL_DBG, "Received join request from %d-%d", recv_msg.tcp_port, recv_msg.udp_port);
 
         // reply with join reply
+        remv_peer(&state, recv_msg.tcp_port, recv_msg.udp_port); // remove node if previously among peers
+
         struct join_reply snd_msg;
         memset(&snd_msg, 0, sizeof(snd_msg));
 
@@ -208,6 +247,13 @@ void *udp_port_listener(__attribute__((unused)) void *params) {
             continue;
         }
 
+        // reply with NOT_A_PEER if the received message is not from a known peer
+        if (!is_peer(&state, recv_msg.node_name_udp)) {
+            logg(LEVEL_DBG, "Received a message from %d who is not a peer", recv_msg.node_name_udp);
+            reply_not_peer(&state, recv_msg.node_name_udp);
+            continue;
+        }
+
         if (recv_msg.message_type == GOSSIP_UPDATE) {
             logg(LEVEL_DBG, "Received %d changes via gossip", recv_msg.cnt_updates);
             process_updates(&state, &recv_msg);
@@ -231,6 +277,10 @@ void *udp_port_listener(__attribute__((unused)) void *params) {
         }
         if (recv_msg.message_type == REQUEST_PROBE) {
             append_request_probe(&state, recv_msg.target_udp, recv_msg.node_name_udp);
+        }
+        if (recv_msg.message_type == NOT_A_PEER) {
+            logg(LEVEL_INFO, "Received not a peer from %d-%d. Rejoining...", recv_msg.node_name_tcp, recv_msg.node_name_udp);
+            reset_state();
         }
     }
 

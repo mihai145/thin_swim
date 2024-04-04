@@ -76,4 +76,10 @@ void append_request_probe(struct node_state *state, int target_udp, int requesto
 
 void fulfil_request_probes(struct node_state *state, int udp_port);
 
+int is_peer(struct node_state *state, int udp_port);
+
+void reply_not_peer(struct node_state *state, int udp_port);
+
+void remv_peer(struct node_state *state, int tcp_port, int udp_port);
+
 #endif
