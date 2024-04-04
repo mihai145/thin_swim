@@ -87,10 +87,14 @@ int main(int argc, char **argv) {
     // node running...
     while (1) {
         char *peers_repr = print_peers(&state);
-        logg(LEVEL_INFO, "peers: %s", peers_repr);
+        logg(LEVEL_PEERS, "peers: %s", peers_repr);
         free(peers_repr);
 
+#ifdef STRESS_TEST
+        sleep(3);
+#else
         sleep(10);
+#endif
     }
 
     return 0;

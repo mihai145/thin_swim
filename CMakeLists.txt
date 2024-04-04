@@ -34,3 +34,7 @@ target_link_libraries(start PRIVATE c_setup)
 # SAFE MODE (additional runtime checks)
 target_compile_definitions(node PRIVATE SAFE_MODE)
 target_compile_definitions(lazy_node PRIVATE SAFE_MODE)
+
+# STRESS TEST MODE
+target_compile_definitions(node PRIVATE STRESS_TEST)
+target_compile_definitions(lazy_node PRIVATE STRESS_TEST)

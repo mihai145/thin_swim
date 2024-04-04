@@ -21,6 +21,8 @@ void set_color(const char* level, char* log, char* msg) {
         sprintf(log, COLORED_LOG_FORMAT, COLOR_DBG, msg, COLOR_RESET);
     } else if (strcmp(level, LEVEL_FATAL) == 0) {
         sprintf(log, COLORED_LOG_FORMAT, COLOR_FATAL, msg, COLOR_RESET);
+    } else if (strcmp(level, LEVEL_PEERS) == 0) {
+        sprintf(log, COLORED_LOG_FORMAT, COLOR_PEERS, msg, COLOR_RESET);
     }
 }
 
@@ -31,6 +33,12 @@ void unset_color() {
 void logg(const char* level, const char* fmt, ...) {
 #ifdef LOGS_SUCCINT
     if (strcmp(level, LEVEL_DBG) == 0) {
+        return;
+    }
+#endif
+
+#ifdef STRESS_TEST
+    if (strcmp(level, LEVEL_PEERS) != 0) {
         return;
     }
 #endif
