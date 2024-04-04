@@ -18,6 +18,7 @@ struct node_state {
 
     pthread_mutex_t lock;
 
+    long long grace_period_until;
     int lamport_time;
 
     int capacity, num_peers;
@@ -81,5 +82,7 @@ int is_peer(struct node_state *state, int udp_port);
 void reply_not_peer(struct node_state *state, int udp_port);
 
 void remv_peer(struct node_state *state, int tcp_port, int udp_port);
+
+double get_remaining_grace_period(struct node_state *state);
 
 #endif

@@ -12,10 +12,7 @@ target_include_directories(c_setup INTERFACE include)
 
 # NODES
 add_executable(node src/node.c src/node_manager.c src/state.c src/log.c src/time_utils.c)
-add_executable(lazy_node src/node.c src/node_manager.c src/state.c src/log.c src/time_utils.c)
 target_link_libraries(node PRIVATE c_setup m)
-target_link_libraries(lazy_node PRIVATE c_setup m)
-target_compile_definitions(lazy_node PRIVATE LAZY_NODE)
 
 # TESTS
 add_executable(test_log test/test_log.c src/log.c)
@@ -29,12 +26,9 @@ target_link_libraries(start PRIVATE c_setup)
 
 # HIDES DEBUG LOGS:
 # target_compile_definitions(node PRIVATE LOGS_SUCCINT)
-# target_compile_definitions(lazy_node PRIVATE LOGS_SUCCINT)
 
 # SAFE MODE (additional runtime checks)
-target_compile_definitions(node PRIVATE SAFE_MODE)
-target_compile_definitions(lazy_node PRIVATE SAFE_MODE)
+# target_compile_definitions(node PRIVATE SAFE_MODE)
 
 # STRESS TEST MODE
 target_compile_definitions(node PRIVATE STRESS_TEST)
-target_compile_definitions(lazy_node PRIVATE STRESS_TEST)

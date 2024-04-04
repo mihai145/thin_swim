@@ -26,6 +26,13 @@ void populate_peers(struct node_state *state, int num_peers, int* tcp_ports, int
 
     memcpy(state->tcp_ports, tcp_ports, sizeof(int) * num_peers);
     memcpy(state->udp_ports, udp_ports, sizeof(int) * num_peers);
+
+    // get current time
+    struct timespec tp;
+    clock_gettime(CLOCK_MONOTONIC, &tp);
+
+    long long ns = tp.tv_sec * 1000000000ll + tp.tv_nsec;
+    state->grace_period_until = ns + GRACE_PERIOD * 1000000000ll;
 }
 
 int append_member(struct node_state *state, int tcp_port, int udp_port) {
@@ -197,7 +204,6 @@ int* get_random_peers_except(struct node_state *state, int requested_peers, int 
 }
 
 void check_fy(int *a, int cnt) {
-#ifdef SAFE_MODE
     int ok = 1;
     for (int i = 0; i < cnt; i++) {
         if (a[i] < 0 || a[i] > 60000) {
@@ -216,7 +222,6 @@ void check_fy(int *a, int cnt) {
     }
 
     if (ok) logg(LEVEL_DBG, "Fisher Yates ok");
-#endif
 }
 
 void gossip_changes(struct node_state *state) {
@@ -245,7 +250,11 @@ void gossip_changes(struct node_state *state) {
     // send message to (at most) fan_out random peers
     int cnt_random_peers;
     int *random_peers = get_random_peers(state, FAN_OUT, &cnt_random_peers);
+
+#ifdef SAFE_MODE
     check_fy(random_peers, cnt_random_peers);
+#endif
+
     for (int i = 0; i < cnt_random_peers; i++) {
         logg(LEVEL_DBG, "Gossiping %d changes to %d", gossip.cnt_updates, random_peers[i]);
         send_gossip_message_to(random_peers[i], &gossip);
@@ -295,6 +304,28 @@ void add_peer(struct node_state *state, int tcp_port, int udp_port) {
     state->num_peers++;
 }
 
+void fix_broadcast_list(struct node_state *state) {
+    int ptr_broadcast = 0;
+    struct broadcast* fixed_list = (struct broadcast*)malloc(sizeof(struct broadcast) * state->cnt_broadcast);
+
+    for (int i = 0; i < state->cnt_broadcast; i++) {
+        if (state->broadcast_list[i].status == 0 && idx_of(state, state->broadcast_list[i].tcp_port, state->broadcast_list[i].udp_port) > 0) {
+            continue;
+        }
+        if (state->broadcast_list[i].status == 1 && idx_of(state, state->broadcast_list[i].tcp_port, state->broadcast_list[i].udp_port) == -1) {
+            continue;
+        }
+
+        fixed_list[ptr_broadcast++] = state->broadcast_list[i];
+    }
+
+    state->cnt_broadcast = ptr_broadcast;
+    for (int i = 0; i < ptr_broadcast; i++) {
+        state->broadcast_list[i] = fixed_list[i];
+    }
+    free(fixed_list);
+}
+
 void update_member(struct node_state *state, int tcp_port, int udp_port, int status) {
     int append_to_broadcast = 0;
     int idx_peer = idx_of(state, tcp_port, udp_port);
@@ -318,6 +349,8 @@ void update_member(struct node_state *state, int tcp_port, int udp_port, int sta
     if (append_to_broadcast) {
         add_broadcast_to_list(state, tcp_port, udp_port, status);
     }
+
+    fix_broadcast_list(state);
 }
 
 void process_updates(struct node_state *state, struct gossip_message *gossip) {
@@ -453,7 +486,10 @@ void request_probes_if_no_ack(struct node_state *state) {
         if (state->num_peers > 0) {
             int cnt_random_peers;
             int *random_peers = get_random_peers_except(state, FAN_OUT, &cnt_random_peers, state->current_udp_port_to_probe);
-            check_fy(random_peers, cnt_random_peers);
+
+#ifdef SAFE_MODE
+                check_fy(random_peers, cnt_random_peers);
+#endif
 
             for (int i = 0; i < cnt_random_peers; i++) {
                 logg(LEVEL_DBG, "Sending request-probe to %d to check on %d", random_peers[i], state->current_udp_port_to_probe);
@@ -589,4 +625,22 @@ void remv_peer(struct node_state *state, int tcp_port, int udp_port) {
         remove_peer(state, idx_peer);
     }
     pthread_mutex_unlock(&state->lock);
+}
+
+double get_remaining_grace_period(struct node_state *state) {
+    pthread_mutex_lock(&state->lock);
+
+    // get current time
+    struct timespec tp;
+    clock_gettime(CLOCK_MONOTONIC, &tp);
+
+    long long ns = tp.tv_sec * 1000000000 + tp.tv_nsec;
+    long long diff = state->grace_period_until - ns;
+
+    double to_sleep = 0.;
+    if (diff > 0) to_sleep = 1. * diff / 1000000000.;
+
+    pthread_mutex_unlock(&state->lock);
+
+    return to_sleep;
 }

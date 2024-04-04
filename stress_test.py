@@ -9,7 +9,7 @@ NUM_SEEDS = 20
 KILLS_ROUND = 6
 JOINS_ROUND = 6
 NUM_ROUNDS = 10
-COOLDOWN = 10
+COOLDOWN = 8
 GRACE_PERIOD = 5
 
 
@@ -46,8 +46,7 @@ class Simulation:
         return peers
 
     def start_seed(self, seed, peers):
-        type = 'node' if np.random.rand() < 0.5 else 'lazy_node'
-        print(f'Forking seed <{type}> {seed}')
+        print(f'Forking seed {seed}')
         self.history_peers.add(seed)
 
         pid = os.fork()
@@ -58,18 +57,17 @@ class Simulation:
             self.history.add(seed[1])
             self.peer_to_pid[seed] = pid
         elif pid == 0:
-            args = [f"./build/{type}", "--ports", str(seed[0]), str(seed[1])]
+            args = [f"./build/node", "--ports", str(seed[0]), str(seed[1])]
             for peer in peers:
                 args.append("--seed")
                 args.append(str(peer[0]))
                 args.append(str(peer[1]))
-            os.execv(f"./build/{type}", args)
+            os.execv(f"./build/node", args)
         else:
             print("Error forking the process")
 
     def join_peer(self, peer, gateway):
-        type = 'node' if np.random.rand() < 0.5 else 'lazy_node'
-        print(f'Forking peer <{type}> {peer} to join {gateway}')
+        print(f'Forking peer {peer} to join {gateway}')
         self.history_peers.add(peer)
 
         pid = os.fork()
@@ -80,9 +78,9 @@ class Simulation:
             self.history.add(peer[1])
             self.peer_to_pid[peer] = pid
         elif pid == 0:
-            args = [f"./build/{type}", "--ports", str(peer[0]), str(peer[1])]
+            args = [f"./build/node", "--ports", str(peer[0]), str(peer[1])]
             args.extend(["--join", str(gateway[0]), str(gateway[1])])
-            os.execv(f"./build/{type}", args)
+            os.execv(f"./build/node", args)
         else:
             print("Error forking the process")
 

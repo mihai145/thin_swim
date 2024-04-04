@@ -262,15 +262,6 @@ void *udp_port_listener(__attribute__((unused)) void *params) {
             process_updates(&state, &recv_msg);
         }
         if (recv_msg.message_type == PROBE) {
-            #ifdef LAZY_NODE
-                    pthread_mutex_lock(&state.lock);
-                    int fraction = 2 + state.num_peers;
-                    if (fraction <= 0) fraction = 2;
-                    pthread_mutex_unlock(&state.lock);
-
-                    logg(LEVEL_DBG, "Lazing around %f seconds...", 1. * PROBE_PERIOD / (2 * fraction));
-                    sleep_(1. * PROBE_PERIOD / (2 * fraction));
-            #endif
             logg(LEVEL_DBG, "Probed by %d. Sending reply...", recv_msg.node_name_udp);
             reply_probe(&state, recv_msg.node_name_udp);
         }
@@ -291,10 +282,12 @@ void *udp_port_listener(__attribute__((unused)) void *params) {
 }
 
 void *prober(__attribute__((unused)) void *params) {
-    sleep(GRACE_PERIOD);
     logg(LEVEL_INFO, "Started probing...");
 
     while (1) {
+        double to_sleep = get_remaining_grace_period(&state);
+        if (to_sleep > 0) sleep_(to_sleep);
+
         probe_next(&state);
         sleep_(1. * PROBE_PERIOD / 4.);
 
@@ -309,10 +302,12 @@ void *prober(__attribute__((unused)) void *params) {
 }
 
 void *gossiper(__attribute__((unused)) void *params) {
-    sleep(GRACE_PERIOD);
     logg(LEVEL_INFO, "Started gossiping...");
 
     while (1) {
+        double to_sleep = get_remaining_grace_period(&state);
+        if (to_sleep > 0) sleep_(to_sleep);
+
         gossip_changes(&state);
         sleep(GOSSIP_PERIOD);
     }

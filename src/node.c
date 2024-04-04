@@ -91,11 +91,7 @@ int main(int argc, char **argv) {
         logg(LEVEL_PEERS, "peers: %s", peers_repr);
         free(peers_repr);
 
-#ifdef STRESS_TEST
-        sleep(3);
-#else
-        sleep(10);
-#endif
+        sleep(1);
     }
 
     return 0;
