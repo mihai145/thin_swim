@@ -17,6 +17,7 @@ extern struct node_state state;
 void sigint_handler(__attribute__((unused)) int signum)
 {
     logg(LEVEL_FATAL, "Received SIGINT, stopping...");
+    cleanup_logger();
     exit(0);
 }
 

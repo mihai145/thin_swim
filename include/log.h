@@ -18,6 +18,8 @@
 
 void init_logger(int tcp_port_, int udp_port_);
 
+void cleanup_logger();
+
 void logg(const char* level, const char* fmt, ...);
 
 #endif

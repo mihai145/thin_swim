@@ -15,5 +15,7 @@ int main() {
 
     logg(LEVEL_INFO, "Test done!");
 
+    cleanup_logger();
+
     return 0;
 }

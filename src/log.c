@@ -8,10 +8,19 @@
 
 
 int log_tcp_port, log_udp_port;
+FILE* f;
 
 void init_logger(int tcp_port_, int udp_port_) {
     log_tcp_port = tcp_port_;
     log_udp_port = udp_port_;
+
+    char log_filename[20];
+    sprintf(log_filename, "%d_%d.log", tcp_port_, udp_port_);
+    f = fopen(log_filename, "a");
+}
+
+void cleanup_logger() {
+    fclose(f);
 }
 
 void set_color(const char* level, char* log, char* msg) {
@@ -76,6 +85,8 @@ void logg(const char* level, const char* fmt, ...) {
 
     set_color(level, log, prefix);
     puts(log);
+    fputs(log, f);
+    fputs("\n", f);
 
     free(p);
     free(prefix);
