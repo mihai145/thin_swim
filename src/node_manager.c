@@ -77,7 +77,10 @@ void reset_state() {
     }
 
     int rand_peer = rand() % state.num_peers;
+    logg(LEVEL_INFO, "Rejoining via %d-%d", state.tcp_ports[rand_peer], state.udp_ports[rand_peer]);
     join_network(state.tcp_ports[rand_peer], state.udp_ports[rand_peer]);
+
+    sleep_(GOSSIP_PERIOD);
 
     pthread_mutex_unlock(&state.lock);
 }

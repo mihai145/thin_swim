@@ -5,7 +5,7 @@
 #include "gossip_message.h"
 
 #define CAPACITY 100
-#define FAN_OUT 2
+#define FAN_OUT 3
 
 
 // STRUCTS
