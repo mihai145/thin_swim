@@ -30,3 +30,7 @@ target_link_libraries(start PRIVATE c_setup)
 # HIDES DEBUG LOGS:
 # target_compile_definitions(node PRIVATE LOGS_SUCCINT)
 # target_compile_definitions(lazy_node PRIVATE LOGS_SUCCINT)
+
+# SAFE MODE (additional runtime checks)
+target_compile_definitions(node PRIVATE SAFE_MODE)
+target_compile_definitions(lazy_node PRIVATE SAFE_MODE)

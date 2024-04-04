@@ -130,6 +130,100 @@ void send_gossip_message_to(int udp_port, struct gossip_message *gossip) {
     }
 }
 
+void swap(int *a, int *b) {
+    int temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
+// Fisher Yates algorithm for random shuffling an array in linear time
+int* fisher_yates_(int* a, int nr) {
+    int* b = (int*)malloc(nr * sizeof(int));
+    memcpy(b, a, nr * sizeof(int));
+
+    for (int i = nr - 1; i >= 0; i--) {
+        int rand_idx = rand() % (i + 1);
+        swap(&b[i], &b[rand_idx]);
+    }
+    return b;
+}
+
+void shuffle_ports_to_probe(struct node_state *state) {
+    // clear data structure
+    state->cnt_probing = state->num_peers;
+    if (state->tcp_ports_to_probe != NULL) free(state->tcp_ports_to_probe);
+    if (state->udp_ports_to_probe != NULL) free(state->udp_ports_to_probe);
+
+    state->tcp_ports_to_probe = (int*)malloc(sizeof(int) * state->cnt_probing);
+    state->udp_ports_to_probe = (int*)malloc(sizeof(int) * state->cnt_probing);
+
+    // shuffle indices
+    int *idx = (int*)malloc(sizeof(int) * state->cnt_probing);
+    for (int i = 0; i < state->cnt_probing; i++) idx[i] = i;
+    int *shuffle_idx = fisher_yates_(idx, state->cnt_probing);
+    free(idx);
+
+    for (int i = 0; i < state->cnt_probing; i++) {
+        state->tcp_ports_to_probe[i] = state->tcp_ports[shuffle_idx[i]];
+        state->udp_ports_to_probe[i] = state->udp_ports[shuffle_idx[i]];
+    }
+    free(shuffle_idx);
+}
+
+int* get_random_peers(struct node_state *state, int requested_peers, int *cnt_peers) {
+    int *k = malloc(requested_peers * sizeof(int));
+    *cnt_peers = 0;
+
+    int *rand = fisher_yates_(state->udp_ports, state->num_peers);
+    for (int i = 0; i < state->num_peers && i < requested_peers; i++) {
+        k[i] = rand[i];
+        *cnt_peers = *cnt_peers + 1;
+    }
+    free(rand);
+
+    return k;
+}
+
+int* get_random_peers_except(struct node_state *state, int requested_peers, int *cnt_peers, int exception) {
+    int *k = malloc(requested_peers * sizeof(int));
+    *cnt_peers = 0;
+
+    int *rand = fisher_yates_(state->udp_ports, state->num_peers);
+    int ptr_k = 0;
+    for (int i = 0; i < state->num_peers && *cnt_peers < requested_peers; i++) {
+        if (rand[i] != exception) {
+            k[ptr_k++] = rand[i];
+            *cnt_peers = *cnt_peers + 1;
+        }
+    }
+    free(rand);
+
+    return k;
+}
+
+void check_fy(int *a, int cnt) {
+#ifdef SAFE_MODE
+    int ok = 1;
+    for (int i = 0; i < cnt; i++) {
+        if (a[i] < 0 || a[i] > 60000) {
+            logg(LEVEL_FATAL, "Error occured during Fisher Yates");
+            ok = 0;
+        }
+    }
+
+    for (int i = 0; i < cnt; i++) {
+        for (int j = i + 1; j < cnt; j++) {
+            if (a[i] == a[j]) {
+                logg(LEVEL_FATAL, "Error occured during Fisher Yates");
+                ok = 0;
+            }
+        }
+    }
+
+    if (ok) logg(LEVEL_DBG, "Fisher Yates ok");
+#endif
+}
+
 void gossip_changes(struct node_state *state) {
     pthread_mutex_lock(&state->lock);
     if (state->cnt_broadcast == 0) {
@@ -152,14 +246,16 @@ void gossip_changes(struct node_state *state) {
 
     tidy_broadcast_list(state);
 
-    // send message to fan_out random peers (in the current implementation, may not be distinct)
-    if (state->num_peers > 0) {
-        for (int i = 0; i < FAN_OUT; i++) {
-            int idx_peer = rand() % state->num_peers;
-            logg(LEVEL_DBG, "Gossiping %d changes to %d", gossip.cnt_updates, state->udp_ports[idx_peer]);
-            send_gossip_message_to(state->udp_ports[idx_peer], &gossip);
-        }
+    // send message to (at most) fan_out random peers
+    int cnt_random_peers;
+    int *random_peers = get_random_peers(state, FAN_OUT, &cnt_random_peers);
+    check_fy(random_peers, cnt_random_peers);
+    for (int i = 0; i < cnt_random_peers; i++) {
+        logg(LEVEL_DBG, "Gossiping %d changes to %d", gossip.cnt_updates, random_peers[i]);
+        send_gossip_message_to(random_peers[i], &gossip);
     }
+    free(random_peers);
+
     pthread_mutex_unlock(&state->lock);
 }
 
@@ -238,30 +334,6 @@ void process_updates(struct node_state *state, struct gossip_message *gossip) {
     pthread_mutex_unlock(&state->lock);
 }
 
-void swap(int *a, int *b) {
-    int temp = *a;
-    *a = *b;
-    *b = temp;
-}
-
-void fisher_yates(struct node_state *state) {
-    state->cnt_probing = state->num_peers;
-    if (state->tcp_ports_to_probe != NULL) free(state->tcp_ports_to_probe);
-    if (state->udp_ports_to_probe != NULL) free(state->udp_ports_to_probe);
-
-    state->tcp_ports_to_probe = (int*)malloc(sizeof(int) * state->cnt_probing);
-    state->udp_ports_to_probe = (int*)malloc(sizeof(int) * state->cnt_probing);
-    memcpy(state->tcp_ports_to_probe, state->tcp_ports, sizeof(int) * state->cnt_probing);
-    memcpy(state->udp_ports_to_probe, state->udp_ports, sizeof(int) * state->cnt_probing);
-
-    for (int i = state->cnt_probing - 1; i >= 0; i--) {
-        int rand_idx = rand() % (i + 1);
-
-        swap(&state->tcp_ports_to_probe[i], &state->tcp_ports_to_probe[rand_idx]);
-        swap(&state->udp_ports_to_probe[i], &state->udp_ports_to_probe[rand_idx]);
-    }
-}
-
 void probe(struct node_state *state, int udp_port) {
     struct gossip_message gossip;
     gossip.message_type = PROBE;
@@ -297,7 +369,7 @@ void probe_next(struct node_state *state) {
     state->probed = -1;
     if (state->cnt_probing == 0) {
         if (state->num_peers > 0)
-            fisher_yates(state);
+            shuffle_ports_to_probe(state);
     }
 
     if (state->cnt_probing > 0) {
@@ -381,13 +453,17 @@ void request_probes_if_no_ack(struct node_state *state) {
         request.node_name_udp = state->own_udp_port;
         request.node_time = state->lamport_time;
 
-        // send request probe to fan_out random peers (in the current implementation, may not be distinct + MAY BE IDENTICAL to current_udp_port_to_probe)
+        // send request probe to (at most) fan_out random peers
         if (state->num_peers > 0) {
-            for (int i = 0; i < FAN_OUT; i++) {
-                int idx_peer = rand() % state->num_peers;
-                logg(LEVEL_DBG, "Sending request-probe to %d to check on %d", state->udp_ports[idx_peer], state->current_udp_port_to_probe);
-                send_gossip_message_to(state->udp_ports[idx_peer], &request);
+            int cnt_random_peers;
+            int *random_peers = get_random_peers_except(state, FAN_OUT, &cnt_random_peers, state->current_udp_port_to_probe);
+            check_fy(random_peers, cnt_random_peers);
+
+            for (int i = 0; i < cnt_random_peers; i++) {
+                logg(LEVEL_DBG, "Sending request-probe to %d to check on %d", random_peers[i], state->current_udp_port_to_probe);
+                send_gossip_message_to(random_peers[i], &request);
             }
+            free(random_peers);
         }
     }
 
