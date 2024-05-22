@@ -15,11 +15,10 @@
 #define PREFIX_FORMAT "[%s   %ld:%ld   Node %d-%d]: "
 #define COLORED_LOG_FORMAT "%s%s%s"
 
-
 void init_logger(int tcp_port_, int udp_port_);
 
 void cleanup_logger();
 
-void logg(const char* level, const char* fmt, ...);
+void logg(const char *level, const char *fmt, ...);
 
 #endif

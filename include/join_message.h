@@ -3,11 +3,13 @@
 
 #define CAPACITY 100
 
-struct join_request {
+struct join_request
+{
     int tcp_port, udp_port;
 };
 
-struct join_reply {
+struct join_reply
+{
     int num_peers;
 
     int tcp_ports[CAPACITY];

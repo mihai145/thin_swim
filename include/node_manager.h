@@ -1,7 +1,6 @@
 #ifndef NODE_MANAGER_H
 #define NODE_MANAGER_H
 
-
 extern struct node_state state;
 
 void init_state(int tcp_port, int udp_port);

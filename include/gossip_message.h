@@ -9,7 +9,8 @@
 #define ACK_PROBE 3
 #define NOT_A_PEER 4
 
-struct gossip_message {
+struct gossip_message
+{
     int message_type;
     int cnt_updates;
     int tcp_ports[CAPACITY], udp_ports[CAPACITY], statuses[CAPACITY];

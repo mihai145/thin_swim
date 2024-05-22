@@ -6,11 +6,11 @@
 
 #include "log.h"
 
-
 int log_tcp_port, log_udp_port;
-FILE* f;
+FILE *f;
 
-void init_logger(int tcp_port_, int udp_port_) {
+void init_logger(int tcp_port_, int udp_port_)
+{
     log_tcp_port = tcp_port_;
     log_udp_port = udp_port_;
 
@@ -19,35 +19,48 @@ void init_logger(int tcp_port_, int udp_port_) {
     f = fopen(log_filename, "a");
 }
 
-void cleanup_logger() {
+void cleanup_logger()
+{
     fclose(f);
 }
 
-void set_color(const char* level, char* log, char* msg) {
-    if (strcmp(level, LEVEL_INFO) == 0) {
+void set_color(const char *level, char *log, char *msg)
+{
+    if (strcmp(level, LEVEL_INFO) == 0)
+    {
         sprintf(log, COLORED_LOG_FORMAT, COLOR_INFO, msg, COLOR_RESET);
-    } else if (strcmp(level, LEVEL_DBG) == 0) {
+    }
+    else if (strcmp(level, LEVEL_DBG) == 0)
+    {
         sprintf(log, COLORED_LOG_FORMAT, COLOR_DBG, msg, COLOR_RESET);
-    } else if (strcmp(level, LEVEL_FATAL) == 0) {
+    }
+    else if (strcmp(level, LEVEL_FATAL) == 0)
+    {
         sprintf(log, COLORED_LOG_FORMAT, COLOR_FATAL, msg, COLOR_RESET);
-    } else if (strcmp(level, LEVEL_PEERS) == 0) {
+    }
+    else if (strcmp(level, LEVEL_PEERS) == 0)
+    {
         sprintf(log, COLORED_LOG_FORMAT, COLOR_PEERS, msg, COLOR_RESET);
     }
 }
 
-void unset_color() {
+void unset_color()
+{
     printf("\033[0m");
 }
 
-void logg(const char* level, const char* fmt, ...) {
+void logg(const char *level, const char *fmt, ...)
+{
 #ifdef LOGS_SUCCINT
-    if (strcmp(level, LEVEL_DBG) == 0) {
+    if (strcmp(level, LEVEL_DBG) == 0)
+    {
         return;
     }
 #endif
 
 #ifdef STRESS_TEST
-    if (strcmp(level, LEVEL_PEERS) != 0) {
+    if (strcmp(level, LEVEL_PEERS) != 0)
+    {
         return;
     }
 #endif
@@ -65,9 +78,9 @@ void logg(const char* level, const char* fmt, ...) {
     va_end(ap);
 
     // Write message
-    p = (char*)malloc(n + 1);
+    p = (char *)malloc(n + 1);
     va_start(ap, fmt);
-    vsnprintf(p, n+1, fmt, ap);
+    vsnprintf(p, n + 1, fmt, ap);
     va_end(ap);
 
     // Calculate size for preffix
@@ -75,8 +88,8 @@ void logg(const char* level, const char* fmt, ...) {
     int m = snprintf(prefix, 0, PREFIX_FORMAT, level, tp.tv_sec, tp.tv_nsec, log_tcp_port, log_udp_port);
 
     // Write preffix
-    prefix = (char*)malloc(m + n + 1);
-    snprintf(prefix, m+1, PREFIX_FORMAT, level, tp.tv_sec, tp.tv_nsec, log_tcp_port, log_udp_port);
+    prefix = (char *)malloc(m + n + 1);
+    snprintf(prefix, m + 1, PREFIX_FORMAT, level, tp.tv_sec, tp.tv_nsec, log_tcp_port, log_udp_port);
 
     // Concatenate message to prefix
     strcat(prefix, p);

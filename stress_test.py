@@ -2,25 +2,31 @@ import time
 import numpy as np
 import os
 import signal
+import argparse
+import socket, errno
 
 
 # CONSTANTS
-NUM_SEEDS = 20
-KILLS_ROUND = 6
-JOINS_ROUND = 6
-NUM_ROUNDS = 10
-COOLDOWN = 8
-GRACE_PERIOD = 5
+NUM_SEEDS_DEFAULT = 5
+KILLS_ROUND_DEFAULT = 1
+JOINS_ROUND_DEFAULT = 1
+NUM_ROUNDS_DEFAULT = 20
+COOLDOWN_DEFAULT = 5
+GRACE_PERIOD_DEFAULT = 5
 
 
 # UTILS
 def parse_ts(ts):
-    splits = ts.split(':')
+    splits = ts.split(":")
     return int(splits[0]) * 1000000000 + int(splits[1])
 
+
 def parse_peer(peer):
-    splits = peer.split('-')
-    return (int(splits[0]), int(splits[1][:-1]) if splits[1][-1]==',' else int(splits[1]))
+    splits = peer.split("-")
+    return (
+        int(splits[0]),
+        int(splits[1][:-1]) if splits[1][-1] == "," else int(splits[1]),
+    )
 
 
 class Simulation:
@@ -31,12 +37,28 @@ class Simulation:
         self.history_peers = set()
         self.rounds = []
 
+    def in_use(self, port):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        try:
+            s.bind(("127.0.0.1", port))
+            s.close()
+        except socket.error as _:
+            return True
+
+        return False
+
     def generate_peers(self, cnt_peers):
         # generate 2 * cnt_peers distinct numbers, that are also not in self.peers
         ports = set()
         while len(ports) < 2 * cnt_peers:
-            rand_port = np.random.randint(2000, 60000+1)
-            if rand_port in self.ports or rand_port in self.history:
+            rand_port = np.random.randint(2000, 60000 + 1)
+            if (
+                rand_port in self.ports
+                or rand_port in ports
+                or rand_port in self.history
+                or self.in_use(rand_port)
+            ):
                 continue
             ports.add(rand_port)
 
@@ -46,7 +68,7 @@ class Simulation:
         return peers
 
     def start_seed(self, seed, peers):
-        print(f'Forking seed {seed}')
+        print(f"Forking seed {seed}")
         self.history_peers.add(seed)
 
         pid = os.fork()
@@ -67,7 +89,7 @@ class Simulation:
             print("Error forking the process")
 
     def join_peer(self, peer, gateway):
-        print(f'Forking peer {peer} to join {gateway}')
+        print(f"Forking peer {peer} to join {gateway}")
         self.history_peers.add(peer)
 
         pid = os.fork()
@@ -85,7 +107,7 @@ class Simulation:
             print("Error forking the process")
 
     def kill_peer(self, peer):
-        print(f'Killing peer {peer}')
+        print(f"Killing peer {peer}")
         os.kill(self.peer_to_pid[peer], signal.SIGINT)
         self.ports.remove(peer[0])
         self.ports.remove(peer[1])
@@ -104,13 +126,15 @@ class Simulation:
             peer_state[peer] = []
             try:
                 # Parse checkpointed state of given node from the log file
-                with open(f'{peer[0]}_{peer[1]}.log') as f:
+                with open(f"{peer[0]}_{peer[1]}.log") as f:
                     for line in f.readlines():
-                        if "PEERS" not in line:
+                        if "[PEERS" not in line:
                             continue
                         splits = line.split()
                         timestamp = parse_ts(splits[1])
-                        peers = [parse_peer(splits[7+i]) for i in range(int(splits[5]))]
+                        peers = [
+                            parse_peer(splits[7 + i]) for i in range(int(splits[5]))
+                        ]
                         peer_state[peer].append((timestamp, peers))
             finally:
                 pass
@@ -118,8 +142,8 @@ class Simulation:
         return peer_state
 
     def compile_report(self):
-        print(f'\n\n==========SIMULATION RAPORT==========')
-        print(f'Simulation ran for {len(self.rounds)} rounds')
+        print(f"\n\n==========SIMULATION RAPORT==========")
+        print(f"Simulation ran for {len(self.rounds)} rounds")
 
         peer_state = self.parse_logs()
         for idx, (round_ts, expected_peers) in enumerate(self.rounds):
@@ -140,27 +164,47 @@ class Simulation:
             for peer in expected_peers:
                 intersection = len(latest_state[peer] & expected_peers_set)
                 diff = len(latest_state[peer] - expected_peers_set)
-                if intersection == len(expected_peers_set)-1 and diff == 0:
-                    print(f'Node {peer}: OK')
+                if intersection == len(expected_peers_set) - 1 and diff == 0:
+                    print(f"Node {peer}: OK")
                 else:
-                    print(f'Node {peer}: not OK, {diff} extra, {len(expected_peers_set)-1-intersection} missing')
+                    print(
+                        f"Node {peer}: not OK, {diff} extra, {len(expected_peers_set)-1-intersection} missing"
+                    )
 
     def cleanup(self):
         # delete log files
         for peer in self.history_peers:
             try:
-                os.remove(f'{peer[0]}_{peer[1]}.log')
+                os.remove(f"{peer[0]}_{peer[1]}.log")
             finally:
                 pass
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--seeds", default=NUM_SEEDS_DEFAULT, type=int)
+    parser.add_argument("--grace", default=GRACE_PERIOD_DEFAULT, type=int)
+    parser.add_argument("--cooldown", default=COOLDOWN_DEFAULT, type=int)
+    parser.add_argument("--rounds", default=NUM_ROUNDS_DEFAULT, type=int)
+    parser.add_argument("--joins", default=JOINS_ROUND_DEFAULT, type=int)
+    parser.add_argument("--kills", default=KILLS_ROUND_DEFAULT, type=int)
+
+    args = parser.parse_args()
+    NUM_SEEDS, GRACE_PERIOD, NUM_ROUNDS, KILLS_ROUND, JOINS_ROUND, COOLDOWN = (
+        args.seeds,
+        args.grace,
+        args.rounds,
+        args.kills,
+        args.joins,
+        args.cooldown,
+    )
+
     simulation = Simulation()
 
     # generate seeds + fork seeds
     seeds = simulation.generate_peers(NUM_SEEDS)
     for i in range(len(seeds)):
-        simulation.start_seed(seeds[i], seeds[:i] + seeds[i+1:])
+        simulation.start_seed(seeds[i], seeds[:i] + seeds[i + 1 :])
 
     time.sleep(GRACE_PERIOD)
     for round in range(NUM_ROUNDS):
@@ -179,7 +223,7 @@ def main():
 
         # print expected network configuration
         peers = list(simulation.get_peers())
-        print(f'Expected network configuration {len(peers)} peers: {peers}')
+        print(f"Expected network configuration {len(peers)} peers: {peers}")
 
         time.sleep(COOLDOWN)
         simulation.register_round()

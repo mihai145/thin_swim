@@ -1,7 +1,8 @@
 #include "time_utils.h"
 #include "log.h"
 
-int main() {
+int main()
+{
     logg(LEVEL_INFO, "Sleeping for 5 seconds");
     sleep_(5);
 

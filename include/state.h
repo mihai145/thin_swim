@@ -7,12 +7,12 @@
 #define CAPACITY 100
 #define FAN_OUT 3
 
-
 // STRUCTS
 struct broadcast;
 struct node_state;
 
-struct node_state {
+struct node_state
+{
     // These can be accessed without holding the lock
     int own_tcp_port, own_udp_port;
 
@@ -22,36 +22,36 @@ struct node_state {
     int lamport_time;
 
     int capacity, num_peers;
-    int* tcp_ports;
-    int* udp_ports;
+    int *tcp_ports;
+    int *udp_ports;
 
     int cnt_probing;
-    int* tcp_ports_to_probe;
-    int* udp_ports_to_probe;
+    int *tcp_ports_to_probe;
+    int *udp_ports_to_probe;
 
     int current_tcp_port_to_probe;
     int current_udp_port_to_probe;
     int probed;
 
     int cnt_request_probes;
-    int* udp_ports_requested_to_probe;
-    int* udp_ports_requestors;
-    long long* probe_request_ns;
+    int *udp_ports_requested_to_probe;
+    int *udp_ports_requestors;
+    long long *probe_request_ns;
 
     int cnt_broadcast, broadcast_list_capacity;
-    struct broadcast* broadcast_list;
+    struct broadcast *broadcast_list;
 };
 
-struct broadcast {
-   int tcp_port, udp_port;
-   int status;  // 0 -> removed, 1 -> joined
+struct broadcast
+{
+    int tcp_port, udp_port;
+    int status; // 0 -> removed, 1 -> joined
 
-   int remaining_rounds;
+    int remaining_rounds;
 };
-
 
 // FUNCTIONS
-void populate_peers(struct node_state *state, int num_peers, int* tcp_ports, int *udp_ports);
+void populate_peers(struct node_state *state, int num_peers, int *tcp_ports, int *udp_ports);
 
 int append_member(struct node_state *state, int tcp_port, int udp_port);
 

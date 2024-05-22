@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include "log.h"
 
-
-int main() {
+int main()
+{
     init_logger(8080, 12001);
 
     logg(LEVEL_INFO, "%d + %d = %d is %s", 10, 20, 30, "correct");
